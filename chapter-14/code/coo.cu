@@ -25,7 +25,7 @@ void spmv_coo(int nnz, int rows, int cols, int *h_rowIdx, int *h_colIdx, float *
     cudaMemcpy(d_colIdx, h_colIdx, nnz * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_values, h_values, nnz * sizeof(float), cudaMemcpyHostToDevice);
     cudaMemcpy(d_x, h_x, cols * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemset(d_y, 0, rows * sizeof(float));  // init y as 0
+    cudaMemset(d_y, 0, rows * sizeof(float));  // Initialize y as 0
 
     int blockSize = 256;
     int gridSize = (nnz + blockSize - 1) / blockSize;
@@ -36,7 +36,7 @@ void spmv_coo(int nnz, int rows, int cols, int *h_rowIdx, int *h_colIdx, float *
 
     printf("Result vector y:\n");
     for (int i = 0; i < rows; i++) {
-        printf("%f ", h_y[i]);
+        printf("%.2f ", h_y[i]);
     }
     printf("\n");
 
@@ -49,13 +49,14 @@ void spmv_coo(int nnz, int rows, int cols, int *h_rowIdx, int *h_colIdx, float *
 }
 
 int main() {
-    int h_rowIdx[] = {0, 0, 1, 2};
-    int h_colIdx[] = {0, 1, 2, 2};
-    float h_values[] = {10.0, 20.0, 30.0, 40.0};
-    float h_x[] = {1.0, 2.0, 3.0};  // Input vector
+    // Values from the image
+    int h_rowIdx[] = {0, 0, 1, 1, 1, 2, 2, 3}; // Row indices
+    int h_colIdx[] = {0, 1, 0, 2, 3, 1, 2, 3}; // Column indices
+    float h_values[] = {1, 7, 5, 3, 9, 2, 8, 6}; // Non-zero values
+    float h_x[] = {1, 2, 3, 4};  // Input vector (example)
 
-    int nnz = 4; // Number of non-zero elements
-    int rows = 3, cols = 3;
+    int nnz = 8; // Number of non-zero elements
+    int rows = 4, cols = 4; // Matrix dimensions
 
     spmv_coo(nnz, rows, cols, h_rowIdx, h_colIdx, h_values, h_x);
 
