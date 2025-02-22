@@ -17,6 +17,8 @@ We implement all of the spmv methods mentioned in Chapter 14, in particular:
 To run the programs use Makefile we provide
 
 ```bash
+cd code
+
 make
 ```
 
@@ -71,13 +73,23 @@ Now you can run any program that you are interested in.
 
 **Represent it in each of the following formats: (1) COO, (2) CSR, (3) ELL, and (4) JDS.**
 
+<img src="exercise2.png" alt=""/>
+
 **COO**
+
+<img src="exercise2_coo.png" alt=""/>
 
 **CSR**
 
+<img src="exercise2_csr.png" alt=""/>
+
 **ELL**
 
+<img src="exercise2_ell.png" alt=""/>
+
 **JDS**
+
+<img src="exercise2_jds.png" alt=""/>
 
 ### Exercise 2
 
