@@ -1,6 +1,7 @@
 #include <cuda_runtime.h>
-#include <iostream>
+
 #include <cstdio>
+#include <iostream>
 
 struct CSRMatrix {
     int numRows;
@@ -29,8 +30,8 @@ int main() {
     int h_rowPtrs[] = {0, 2, 5, 7, 8};
     int h_colIdx[] = {0, 1, 0, 2, 3, 1, 2, 3};
     float h_values[] = {1, 7, 5, 3, 9, 2, 8, 6};
-    float h_x[] = {1, 2, 3, 4};  
-    float h_y[4] = {0}; //init as zeros 
+    float h_x[] = {1, 2, 3, 4};
+    float h_y[4] = {0};  // init as zeros
 
     int *d_rowPtrs, *d_colIdx;
     float *d_values, *d_x, *d_y;
