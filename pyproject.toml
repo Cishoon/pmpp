@@ -1,0 +1,16 @@
+[project]
+name = "pmpp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = "==3.11.*"
+dependencies = [
+    "torch",
+    "torchvision",
+    "ninja",
+    "setuptools>=82.0.1",
+]
+
+[tool.uv.sources]
+torch = { path = "/home2/zxy_25/wheels/torch-2.6.0+cu124-cp311-cp311-linux_x86_64.whl" }
+torchvision = { path = "/home2/zxy_25/wheels/torchvision-0.21.0+cu124-cp311-cp311-linux_x86_64.whl" }
