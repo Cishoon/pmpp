@@ -32,7 +32,8 @@ __global__ void conv2d_forward_kernel(
     int out_channels, int kernel_h, int kernel_w,
     int pad_h, int pad_w, int stride_h, int stride_w,
     int out_h, int out_w) {
-    // TODO
+    
+    
 }
 
 // torch::Tensor conv2d_forward(torch::Tensor input, torch::Tensor weights, torch::Tensor bias,
