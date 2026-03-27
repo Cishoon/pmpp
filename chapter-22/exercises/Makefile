@@ -1,4 +1,4 @@
-NVCC      = /usr/local/cuda-12.4/bin/nvcc
+NVCC      = nvcc
 NVCCFLAGS = -O2 -std=c++17
 KERNELS   = kernels
 REF       = reference_kernels.cu
