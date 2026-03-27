@@ -45,7 +45,8 @@ __global__ void ScaledDotProductKernel(const float* d_Q, const float* d_K, float
     float scale = 1.0f / sqrtf((float)d);
     for (int c = 0; c < COARSE; c++) {
         int cur_col = col + c * TILE;
-        d_S[row * N + cur_col] = sum[c] * scale;
+        if (row < N && cur_col < N)
+            d_S[row * N + cur_col] = sum[c] * scale;
     }
 }
 
