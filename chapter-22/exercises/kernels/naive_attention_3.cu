@@ -9,48 +9,43 @@
 #define COARSE 4
 
 __global__ void ScaledDotProductKernel(const float* d_Q, const float* d_K, float* d_S, int N, int d) {
-    int row = threadIdx.x + blockIdx.x * TILE;
-    int col = threadIdx.y + blockIdx.y * TILE * COARSE;
     int tx = threadIdx.x;
     int ty = threadIdx.y;
+    int row = threadIdx.x + blockIdx.x * TILE;
+    int col = threadIdx.y + blockIdx.y * TILE * COARSE;
     
     __shared__ float s_Q[TILE][TILE];
-    __shared__ float s_K[TILE][TILE * COARSE];
+    __shared__ float s_K[TILE][TILE];
     
     float sum[COARSE] = {};
     
     for (int i = 0; i < cdiv(d, TILE); i++) {
-        // s_Q[tx][ty] = d_Q[row][i * TILE + ty]
         if (row < N && i * TILE + ty < d)
             s_Q[tx][ty] = d_Q[row * d + i * TILE + ty];
         else
             s_Q[tx][ty] = 0.0f;
         
-        // s_K[tx][ty] = d_K^T[i * TILE + tx][col]
         #pragma unroll
         for (int c = 0; c < COARSE; c++) {
             int cur_col = col + c * TILE;
+            
             if (cur_col < N && i * TILE + tx < d)
-                s_K[tx][ty + c * TILE] = d_K[cur_col * d + i * TILE + tx];
+                s_K[tx][ty] = d_K[cur_col * d + i * TILE + tx];
             else
-                s_K[tx][ty + c * TILE] = 0.0f;
-        }
-        __syncthreads();
-        
-        for (int k = 0; k < TILE; k++) {
-            for (int c = 0; c < COARSE; c++) {
-                sum[c] += s_Q[tx][k] * s_K[k][ty + c * TILE];
+                s_K[tx][ty] = 0.0f;
+            __syncthreads();
+            
+            for (int k = 0; k < TILE; k++) {
+                sum[c] += s_Q[tx][k] * s_K[k][ty];    
             }
+            __syncthreads();
         }
-        __syncthreads();
     }
     
     float scale = 1.0f / sqrtf((float)d);
-    #pragma unroll
     for (int c = 0; c < COARSE; c++) {
         int cur_col = col + c * TILE;
-        if (row < N && cur_col < N) 
-            d_S[row * N + cur_col] = sum[c] * scale;
+        d_S[row * N + cur_col] = sum[c] * scale;
     }
 }
 
