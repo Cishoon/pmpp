@@ -95,37 +95,7 @@ __global__ void SoftmaxKernel(const float* d_S, float* d_P, int N) {
 }
 
 __global__ void PVMultiplyKernel(const float* d_P, const float* d_V, float* d_O, int N, int d) {
-    int tx = threadIdx.x;
-    int ty = threadIdx.y;
-    int row = tx + blockIdx.x * blockDim.x;
-    int col = ty + blockIdx.y * blockDim.y;
     
-    __shared__ float s_P[TILE][TILE];
-    __shared__ float s_V[TILE][TILE];
-    
-    float sum = 0.0f;
-    for (int i = 0; i < cdiv(N, TILE); i++) {
-        if (row < N && i * TILE + ty < N) {
-            s_P[tx][ty] = d_P[row * N + i * TILE + ty];
-        } else {
-            s_P[tx][ty] = 0.0f;
-        }
-        if (i * TILE + tx < N && col < d) {
-            s_V[tx][ty] = d_V[(i * TILE + tx) * d + col];
-        } else {
-            s_V[tx][ty] = 0.0f;
-        }
-        __syncthreads();
-        
-        for (int k = 0; k < TILE; k++) {
-            sum += s_P[tx][k] * s_V[k][ty];
-        }
-        __syncthreads();
-    }
-    
-    if (row < N && col < d) {
-        d_O[row * d + col] = sum;
-    }
 }
 
 void launch_naive_attention(
