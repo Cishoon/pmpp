@@ -1,0 +1,174 @@
+#include <cmath>
+#include <cfloat>
+#include <cstdio>
+#include <cuda_runtime.h>
+
+#define TILE 16
+#define BLOCK_SIZE 256
+#define cdiv(a, b) (((a) + (b) - 1) / (b))
+#define COARSE 4
+
+__global__ void ScaledDotProductKernel(const float* d_Q, const float* d_K, float* d_S, int N, int d) {
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int row = tx + blockIdx.x * TILE;
+    int col = ty + blockIdx.y * TILE * COARSE;
+    
+    __shared__ float s_Q[TILE][TILE];
+    __shared__ float s_K[TILE][TILE * COARSE];
+    
+    float sum[COARSE] = {0.0f, 0.0f, 0.0f, 0.0f};
+    
+    for (int i = 0; i < cdiv(d, TILE); i++) {
+        // s_Q[tx][ty] = d_Q[row][ty + i * TILE]
+        if (row < N && ty + i * TILE < d)
+            s_Q[tx][ty] = d_Q[row * d + ty + i * TILE];
+        else
+            s_Q[tx][ty] = 0.0f;
+        // s_K[tx][ty] = d_K^T [tx + i * TILE][col]
+        if (col < N && tx + i * TILE < d) 
+            s_K[tx][ty] = d_K[col * d + tx + i * TILE];
+        else 
+            s_K[tx][ty] = 0.0f;
+        if (col + TILE < N && tx + i * TILE < d) 
+            s_K[tx][ty + TILE] = d_K[(col + TILE) * d + tx + i * TILE];
+        else
+            s_K[tx][ty + TILE] = 0.0f;
+        if (col + 2*TILE < N && tx + i * TILE < d) 
+            s_K[tx][ty + 2*TILE] = d_K[(col + 2*TILE) * d + tx + i * TILE];
+        else
+            s_K[tx][ty + 2*TILE] = 0.0f;
+        if (col + 3*TILE < N && tx + i * TILE < d) 
+            s_K[tx][ty + 3*TILE] = d_K[(col + 3*TILE) * d + tx + i * TILE];
+        else
+            s_K[tx][ty + 3*TILE] = 0.0f;
+        __syncthreads();
+        
+        for (int k = 0; k < TILE; k++) {
+            sum[0] += s_Q[tx][k] * s_K[k][ty];
+            sum[1] += s_Q[tx][k] * s_K[k][ty + TILE];
+            sum[2] += s_Q[tx][k] * s_K[k][ty + 2*TILE];
+            sum[3] += s_Q[tx][k] * s_K[k][ty + 3*TILE];
+        }
+        __syncthreads();
+    }
+    
+    if (row < N && col < N) 
+        d_S[row * N + col] = sum[0] / sqrtf((float)d);
+    if (row < N && col + TILE < N) 
+        d_S[row * N + col + TILE] = sum[1] / sqrtf((float)d);
+    if (row < N && col + 2*TILE < N) 
+        d_S[row * N + col + 2*TILE] = sum[2] / sqrtf((float)d);
+    if (row < N && col + 3*TILE < N) 
+        d_S[row * N + col + 3*TILE] = sum[3] / sqrtf((float)d);
+}
+
+__global__ void SoftmaxKernel(const float* d_S, float* d_P, int N) {
+    int row = blockIdx.x;
+    int tid = threadIdx.x;
+    
+    __shared__ float sdata[BLOCK_SIZE];
+    
+    // 1. 求局部最大值
+    float local_max = -FLT_MAX;
+    for (int i = tid; i < N; i += BLOCK_SIZE) {
+        local_max = fmax(local_max, d_S[row * N + i]);
+    }
+    sdata[tid] = local_max;
+    __syncthreads();
+    
+    // 归约，求整行的最大值
+    for (int stride = BLOCK_SIZE / 2; stride >= 1; stride >>= 1) {
+        if (tid < stride) {
+            sdata[tid] = fmax(sdata[tid], sdata[tid + stride]);
+        }
+        __syncthreads();
+    }
+    float m = sdata[0];
+    
+    // 2. 自然指数求和
+    float local_sum = 0.0f;
+    for (int i = tid; i < N; i += BLOCK_SIZE) {
+        local_sum += expf(d_S[row * N + i] - m);
+    }
+    sdata[tid] = local_sum;
+    __syncthreads();
+    
+    for (int stride = BLOCK_SIZE / 2; stride >= 1; stride >>= 1) {
+        if (tid < stride) {
+            sdata[tid] += sdata[tid + stride];
+        }
+        __syncthreads();
+    }
+    float sum = sdata[0];
+    
+    for (int i = tid; i < N; i += BLOCK_SIZE) {
+        d_P[row * N + i] = expf(d_S[row * N + i] - m) / sum;
+    }
+}
+
+__global__ void PVMultiplyKernel(const float* d_P, const float* d_V, float* d_O, int N, int d) {
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int row = tx + blockIdx.x * blockDim.x;
+    int col = ty + blockIdx.y * blockDim.y;
+    
+    __shared__ float s_P[TILE][TILE];
+    __shared__ float s_V[TILE][TILE];
+    
+    float sum = 0.0f;
+    for (int i = 0; i < cdiv(N, TILE); i++) {
+        if (row < N && i * TILE + ty < N) {
+            s_P[tx][ty] = d_P[row * N + i * TILE + ty];
+        } else {
+            s_P[tx][ty] = 0.0f;
+        }
+        if (i * TILE + tx < N && col < d) {
+            s_V[tx][ty] = d_V[(i * TILE + tx) * d + col];
+        } else {
+            s_V[tx][ty] = 0.0f;
+        }
+        __syncthreads();
+        
+        for (int k = 0; k < TILE; k++) {
+            sum += s_P[tx][k] * s_V[k][ty];
+        }
+        __syncthreads();
+    }
+    
+    if (row < N && col < d) {
+        d_O[row * d + col] = sum;
+    }
+}
+
+void launch_naive_attention(
+    const float* d_Q, const float* d_K, const float* d_V, float* d_O,
+    int N, int d
+) {
+    float* d_S, *d_P;
+    cudaMalloc(&d_S, sizeof(float) * N * N);
+    cudaMalloc(&d_P, sizeof(float) * N * N);
+    
+    // 1. S = Q K^T / sqrt(d)
+    dim3 block1(TILE, TILE);
+    dim3 grid1(cdiv(N, TILE), cdiv(N, TILE)); // 想输出矩阵是 NxN的，每一个线程计算一个输出元素。
+    ScaledDotProductKernel<<<grid1, block1>>>(
+        d_Q, d_K, d_S, N, d
+    );
+    // 2. P = softmax(S);
+    dim3 block2(BLOCK_SIZE);
+    dim3 grid2(N);
+    SoftmaxKernel<<<grid2, block2>>>(
+        d_S, d_P, N
+    );
+    
+    // 3. O = P V
+    dim3 block3(TILE, TILE);
+    dim3 grid3(cdiv(N, TILE), cdiv(d, TILE));
+    PVMultiplyKernel<<<grid3, block3>>>(
+        d_P, d_V, d_O, N, d
+    );
+    
+    cudaFree(d_S);
+    cudaFree(d_P);
+}
