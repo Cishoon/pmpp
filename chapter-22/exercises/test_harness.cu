@@ -182,7 +182,7 @@ void run_benchmark(
     cudaMemcpy(d_K, h_K, qkv_bytes, cudaMemcpyHostToDevice);
     cudaMemcpy(d_V, h_V, qkv_bytes, cudaMemcpyHostToDevice);
 
-    float ms = benchmark_kernel(launch_fn, d_Q, d_K, d_V, d_O, N, d, 10, 50);
+    float ms = benchmark_kernel(launch_fn, d_Q, d_K, d_V, d_O, N, d, 5, 10);
     printf("  %-28s  N=%-4d d=%-3d  %.3f ms\n", name, N, d, ms);
 
     cudaFree(d_Q); cudaFree(d_K); cudaFree(d_V); cudaFree(d_O);

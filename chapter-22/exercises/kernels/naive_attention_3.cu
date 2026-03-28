@@ -95,7 +95,45 @@ __global__ void SoftmaxKernel(const float* d_S, float* d_P, int N) {
 }
 
 __global__ void PVMultiplyKernel(const float* d_P, const float* d_V, float* d_O, int N, int d) {
+    int tx = threadIdx.x;
+    int ty = threadIdx.y;
+    int row = threadIdx.x + blockIdx.x * TILE;
+    int col = threadIdx.y + blockIdx.y * TILE * COARSE;
     
+    __shared__ float s_P[TILE][TILE];
+    __shared__ float s_V[TILE][TILE];
+    
+    float sum[COARSE] = {};
+    for (int i = 0; i < cdiv(N, TILE); i++) {
+        // s_P[tx][ty] = d_P[row][i * TILE + ty]
+        if (row < N && i * TILE + ty < N)
+            s_P[tx][ty] = d_P[row * N + i * TILE + ty];
+        else 
+            s_P[tx][ty] = 0.0f;
+        
+        #pragma unroll
+        for (int c = 0; c < COARSE; c++) {
+            int cur_row = tx + i * TILE;
+            int cur_col = col + c * TILE;
+            if (cur_row < N && cur_col < d)
+                s_V[tx][ty] = d_V[cur_row * d + cur_col];
+            else
+                s_V[tx][ty] = 0.0f;
+            __syncthreads();
+            
+            for (int k = 0; k < TILE; k++) {
+                sum[c] += s_P[tx][k] * s_V[k][ty];
+            }
+            __syncthreads();
+        }
+    }
+    
+    #pragma unroll
+    for (int c = 0; c < COARSE; c++) {
+        int cur_col = col + c * TILE;
+        if (row < N && cur_col < d)
+            d_O[row * d + cur_col] = sum[c];
+    }
 }
 
 void launch_naive_attention(
@@ -121,7 +159,7 @@ void launch_naive_attention(
     
     // 3. O = P V
     dim3 block3(TILE, TILE);
-    dim3 grid3(cdiv(N, TILE), cdiv(d, TILE));
+    dim3 grid3(cdiv(N, TILE), cdiv(d, TILE * COARSE));
     PVMultiplyKernel<<<grid3, block3>>>(
         d_P, d_V, d_O, N, d
     );
