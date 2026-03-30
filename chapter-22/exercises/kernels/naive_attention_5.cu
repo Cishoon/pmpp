@@ -14,8 +14,8 @@ __global__ void ScaledDotProductKernel(const float* d_Q, const float* d_K, float
     int row = threadIdx.y + blockIdx.y * TILE;
     int col = threadIdx.x + blockIdx.x * TILE * COARSE;
     
-    __shared__ float s_Q[TILE][TILE];
-    __shared__ float s_K[TILE][TILE];
+    __shared__ float s_Q[TILE][TILE + 1];
+    __shared__ float s_K[TILE][TILE + 1];
     
     float sum[COARSE] = {};
     
@@ -41,13 +41,13 @@ __global__ void ScaledDotProductKernel(const float* d_Q, const float* d_K, float
             int k_col = blockIdx.x * TILE * COARSE + c * TILE;
             int k_row = i * TILE;
             if (k_col + ty < N && k_row + tx < d)
-                s_K[tx][ty] = d_K[(k_col + ty) * d + k_row + tx];
+                s_K[ty][tx] = d_K[(k_col + ty) * d + k_row + tx];
             else
-                s_K[tx][ty] = 0.0f;
+                s_K[ty][tx] = 0.0f;
             __syncthreads();
             
             for (int k = 0; k < TILE; k++) {
-                sum[c] += s_Q[ty][k] * s_K[k][tx];
+                sum[c] += s_Q[ty][k] * s_K[tx][k];
             }
             __syncthreads();
         }

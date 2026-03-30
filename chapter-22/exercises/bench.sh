@@ -2,7 +2,7 @@
 # 对比所有 naive attention 版本的正确性和性能（表格输出）
 cd "$(dirname "$0")"
 
-VERSIONS="${@:-0 1 2 3 4}"
+VERSIONS="${@:-3 4 5}"
 VALID_VERSIONS=()
 
 # 编译并收集结果
